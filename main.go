@@ -387,6 +387,77 @@ func GenerateRTSPLink(opts RTSPLinkOptions) string {
 		opts.Stream)
 }
 
+// HLSLinkOptions contains the parameters needed to build an HLS URL
+
+type HLSLinkOptions struct {
+	ServerHost  string // HLS server hostname
+	ServerPort  int    // HLS server port (default 16604)
+	JSession    string // Session token from login
+	DevIDNO     string // Device ID number
+	Channel     int    // Channel number (starts from 0)
+	Stream      int    // Stream type (0=main stream, 1=sub stream)
+	RequestType int    // 1 for real-time video
+}
+
+// GenerateHLSLink creates a properly formatted HLS URL for video streaming
+// HLS(HTTP Live streaming) is a streaming media transmission protocol based on HTTP, which is proposed by Apple as a protocol interaction method for transmitting audio and video.
+// Provides the real- time video request address based on the HLS protocol. Currently supports h264, does not support h265.
+func GenerateHLSLink(opts HLSLinkOptions) string {
+	// Set default port if not specified
+	if opts.ServerPort == 0 {
+		opts.ServerPort = 16604
+	}
+
+	// Default to real-time video if not specified
+	if opts.RequestType == 0 {
+		opts.RequestType = 1
+	}
+
+	// Format the HLS URL according to the API documentation
+	return fmt.Sprintf("https://%s:%d/hls/%d_%s_%d_%d.m3u8?jsession=%s",
+		opts.ServerHost,
+		opts.ServerPort,
+		opts.RequestType,
+		opts.DevIDNO,
+		opts.Channel,
+		opts.Stream,
+		opts.JSession)
+}
+
+// RTMPLinkOptions contains the parameters needed to build an RTMP URL
+type RTMPLinkOptions struct {
+	ServerHost string // RTMP server hostname
+	ServerPort int    // RTMP server port (default 6604)
+	JSession   string // Session token from login
+	DevIDNO    string // Device ID number
+	Channel    int    // Channel number (starts from 0)
+	Stream     int    // Stream type (0=main stream, 1=sub stream)
+	AVType     int    // 1=live video, 2=listening
+}
+
+// GenerateRTMPLink creates a properly formatted RTMP URL for video streaming
+func GenerateRTMPLink(opts RTMPLinkOptions) string {
+	// Set default port if not specified
+	if opts.ServerPort == 0 {
+		opts.ServerPort = 6604
+	}
+
+	// Default to live video if not specified
+	if opts.AVType == 0 {
+		opts.AVType = 1
+	}
+
+	// Format the RTMP URL according to the API documentation
+	return fmt.Sprintf("rtmp://%s:%d/3/3?AVType=%d&jsession=%s&DevIDNO=%s&Channel=%d&Stream=%d",
+		opts.ServerHost,
+		opts.ServerPort,
+		opts.AVType,
+		opts.JSession,
+		opts.DevIDNO,
+		opts.Channel,
+		opts.Stream)
+}
+
 const (
 	loginURL       = "https://cloud.samsonix.com/StandardApiAction_login.action"
 	statusURL      = "https://cloud.samsonix.com/StandardApiAction_getDeviceOlStatus.action"
@@ -1120,6 +1191,199 @@ func main() {
 		}, myWindow)
 	})
 
+	// Add RTMP link generation button
+	rtmpBtn := widget.NewButton("Generate RTMP Link", func() {
+		// Ensure we have a valid session and selected device
+		if jsessionCache == "" {
+			dialog.ShowInformation("Error", "Please login first", myWindow)
+			return
+		}
+
+		selectedDevice := deviceSelector.Selected
+		if selectedDevice == "" || selectedDevice == "All Devices" {
+			dialog.ShowInformation("Error", "Please select a specific device", myWindow)
+			return
+		}
+
+		device, ok := deviceMap[selectedDevice]
+		if !ok {
+			dialog.ShowError(fmt.Errorf("invalid device selection"), myWindow)
+			return
+		}
+
+		// Show config dialog for RTMP parameters
+		serverEntry := widget.NewEntry()
+		serverEntry.SetText("cloud.samsonix.com")
+
+		streamOptions := []string{"Main Stream (0)", "Sub Stream (1)"}
+		streamSelector := widget.NewSelect(streamOptions, nil)
+		streamSelector.SetSelected(streamOptions[1]) // Default to sub stream
+
+		channelOptions := []string{"Channel 0", "Channel 1", "Channel 2", "Channel 3"}
+		channelSelector := widget.NewSelect(channelOptions, nil)
+		channelSelector.SetSelected(channelOptions[0]) // Default to channel 0
+
+		configContainer := container.NewVBox(
+			widget.NewLabel("Configure RTMP Stream:"),
+			container.NewGridWithColumns(2,
+				widget.NewLabel("Server:"),
+				serverEntry,
+				widget.NewLabel("Channel:"),
+				channelSelector,
+				widget.NewLabel("Stream Type:"),
+				streamSelector,
+			),
+		)
+
+		dialog.ShowCustomConfirm("RTMP Configuration", "Generate", "Cancel", configContainer, func(generate bool) {
+			if !generate {
+				return
+			}
+
+			// Parse channel number from selection
+			channelStr := channelSelector.Selected
+			channelNum := 0 // Default
+			if len(channelStr) > 0 {
+				channelNum, _ = strconv.Atoi(string(channelStr[len(channelStr)-1]))
+			}
+
+			// Parse stream type from selection
+			streamStr := streamSelector.Selected
+			streamType := 1 // Default to sub stream
+			if strings.Contains(streamStr, "(0)") {
+				streamType = 0 // Main stream
+			}
+
+			// Generate the RTMP link
+			rtmpOptions := RTMPLinkOptions{
+				ServerHost: serverEntry.Text,
+				ServerPort: 6604, // Default port for RTMP
+				JSession:   jsessionCache,
+				DevIDNO:    device.DID,
+				Channel:    channelNum,
+				Stream:     streamType,
+				AVType:     1, // Live video
+			}
+
+			rtmpLink := GenerateRTMPLink(rtmpOptions)
+
+			// Show the generated link
+			linkEntry := widget.NewMultiLineEntry()
+			linkEntry.SetText(rtmpLink)
+			linkEntry.TextStyle = fyne.TextStyle{Monospace: true}
+
+			linkContainer := container.NewVBox(
+				widget.NewLabel("RTMP URL:"),
+				linkEntry,
+			)
+
+			dialog.ShowCustom("RTMP Link", "Close", linkContainer, myWindow)
+		}, myWindow)
+	})
+
+	// Add HLS link generation button
+	hlsBtn := widget.NewButton("Generate HLS Link", func() {
+		// Ensure we have a valid session and selected device
+		if jsessionCache == "" {
+			dialog.ShowInformation("Error", "Please login first", myWindow)
+			return
+		}
+
+		selectedDevice := deviceSelector.Selected
+		if selectedDevice == "" || selectedDevice == "All Devices" {
+			dialog.ShowInformation("Error", "Please select a specific device", myWindow)
+			return
+		}
+
+		device, ok := deviceMap[selectedDevice]
+		if !ok {
+			dialog.ShowError(fmt.Errorf("invalid device selection"), myWindow)
+			return
+		}
+
+		// Show config dialog for HLS parameters
+		serverEntry := widget.NewEntry()
+		serverEntry.SetText("cloud.samsonix.com")
+
+		streamOptions := []string{"Main Stream (0)", "Sub Stream (1)"}
+		streamSelector := widget.NewSelect(streamOptions, nil)
+		streamSelector.SetSelected(streamOptions[1]) // Default to sub stream
+
+		channelOptions := []string{"Channel 0", "Channel 1", "Channel 2", "Channel 3"}
+		channelSelector := widget.NewSelect(channelOptions, nil)
+		channelSelector.SetSelected(channelOptions[0]) // Default to channel 0
+
+		configContainer := container.NewVBox(
+			widget.NewLabel("Configure HLS Stream:"),
+			container.NewGridWithColumns(2,
+				widget.NewLabel("Server:"),
+				serverEntry,
+				widget.NewLabel("Channel:"),
+				channelSelector,
+				widget.NewLabel("Stream Type:"),
+				streamSelector,
+			),
+		)
+
+		dialog.ShowCustomConfirm("HLS Configuration", "Generate", "Cancel", configContainer, func(generate bool) {
+			if !generate {
+				return
+			}
+
+			// Parse channel number from selection
+			channelStr := channelSelector.Selected
+			channelNum := 0 // Default
+			if len(channelStr) > 0 {
+				channelNum, _ = strconv.Atoi(string(channelStr[len(channelStr)-1]))
+			}
+
+			// Parse stream type from selection
+			streamStr := streamSelector.Selected
+			streamType := 1 // Default to sub stream
+			if strings.Contains(streamStr, "(0)") {
+				streamType = 0 // Main stream
+			}
+
+			// Generate the HLS link
+			hlsOptions := HLSLinkOptions{
+				ServerHost:  serverEntry.Text,
+				ServerPort:  16604, // Default port for HLS
+				JSession:    jsessionCache,
+				DevIDNO:     device.DID,
+				Channel:     channelNum,
+				Stream:      streamType,
+				RequestType: 1, // Real-time video
+			}
+
+			hlsLink := GenerateHLSLink(hlsOptions)
+
+			// Show the generated link
+			linkEntry := widget.NewMultiLineEntry()
+			linkEntry.SetText(hlsLink)
+			linkEntry.TextStyle = fyne.TextStyle{Monospace: true}
+
+			// Add HTML video player code
+			htmlCode := fmt.Sprintf(`<video controls preload="none" width="352" height="288" data-setup="{}">
+    <source src="%s" type="application/x-mpegURL">
+</video>`, hlsLink)
+
+			htmlEntry := widget.NewMultiLineEntry()
+			htmlEntry.SetText(htmlCode)
+			htmlEntry.TextStyle = fyne.TextStyle{Monospace: true}
+
+			linkContainer := container.NewVBox(
+				widget.NewLabel("HLS URL:"),
+				linkEntry,
+				widget.NewLabel("HTML Video Player Code:"),
+				htmlEntry,
+			)
+
+			dialog.ShowCustom("HLS Link", "Close", linkContainer, myWindow)
+		}, myWindow)
+	})
+
+	// Create the final UI layout
+	// Create the final UI layout
 	// Create the final UI layout
 	content := container.NewVBox(
 		container.NewGridWithColumns(2,
@@ -1130,11 +1394,13 @@ func main() {
 		),
 		loginBtn,
 		deviceSelector,
-		container.NewGridWithColumns(4,
+		container.NewGridWithColumns(6, // Changed from 5 to 6 columns
 			vehicleInfoBtn,
 			alarmBtn,
 			refreshBtn,
 			rtspBtn,
+			hlsBtn,
+			rtmpBtn, // Added RTMP button
 		),
 		widget.NewLabel("Coordinate System:"),
 		coordSystemSelector,
