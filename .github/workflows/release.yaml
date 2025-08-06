@@ -25,5 +25,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: myapp.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}  # ✅ ВАЖНО: использовать `token` вместо `env`
