@@ -35,7 +35,7 @@ var config AppConfig
 func loadConfig() error {
 	// Set default values
 	config = AppConfig{
-		ServerURL: "https://cloud.samsonix.com",
+		ServerURL: "https://ahd.samsonix.com",
 		APIPort:   443,
 		RTMPPort:  1935,
 		RTSPPort:  6604,
