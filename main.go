@@ -26,6 +26,17 @@ type AppConfig struct {
 	RTMPPort  int
 	RTSPPort  int
 	HLSPort   int
+
+	// UI Elements Visibility
+	ShowLoginButton        bool
+	ShowSaveButton         bool
+	ShowVehicleInfoButton  bool
+	ShowDeviceAlarmsButton bool
+	ShowAutoRefreshButton  bool
+	ShowRTSPButton         bool
+	ShowRTMPButton         bool
+	ShowHLSButton          bool
+	ShowCompanyHierarchy   bool
 }
 
 // Global config variable
@@ -40,6 +51,17 @@ func loadConfig() error {
 		RTMPPort:  1935,
 		RTSPPort:  6604,
 		HLSPort:   16604,
+
+		// Default UI visibility settings
+		ShowLoginButton:        true,
+		ShowSaveButton:         true,
+		ShowVehicleInfoButton:  true,
+		ShowDeviceAlarmsButton: true,
+		ShowAutoRefreshButton:  true,
+		ShowRTSPButton:         true,
+		ShowRTMPButton:         true,
+		ShowHLSButton:          true,
+		ShowCompanyHierarchy:   true,
 	}
 
 	file, err := os.Open("config.ini")
@@ -92,6 +114,25 @@ func loadConfig() error {
 			if port, err := strconv.Atoi(value); err == nil {
 				config.HLSPort = port
 			}
+		// UI Visibility settings
+		case "show_login_button":
+			config.ShowLoginButton = value == "1"
+		case "show_save_button":
+			config.ShowSaveButton = value == "1"
+		case "show_vehicle_info_button":
+			config.ShowVehicleInfoButton = value == "1"
+		case "show_device_alarms_button":
+			config.ShowDeviceAlarmsButton = value == "1"
+		case "show_auto_refresh_button":
+			config.ShowAutoRefreshButton = value == "1"
+		case "show_rtsp_button":
+			config.ShowRTSPButton = value == "1"
+		case "show_rtmp_button":
+			config.ShowRTMPButton = value == "1"
+		case "show_hls_button":
+			config.ShowHLSButton = value == "1"
+		case "show_company_hierarchy":
+			config.ShowCompanyHierarchy = value == "1"
 		}
 	}
 
@@ -1048,11 +1089,13 @@ func main() {
 
 		builder := strings.Builder{}
 
-		// Build and display company hierarchy as a clean tree without IDs
-		builder.WriteString("=== COMPANY HIERARCHY ===\n")
-		hierarchy := buildCompanyHierarchy(vehicleInfo.Companys)
-		printCompanyTree(&builder, hierarchy, 2, "")
-		builder.WriteString("\n")
+		// Build and display company hierarchy only if enabled
+		if config.ShowCompanyHierarchy {
+			builder.WriteString("=== COMPANY HIERARCHY ===\n")
+			hierarchy := buildCompanyHierarchy(vehicleInfo.Companys)
+			printCompanyTree(&builder, hierarchy, 2, "")
+			builder.WriteString("\n")
+		}
 
 		// Display vehicle information
 		builder.WriteString("=== VEHICLE INFORMATION ===\n")
@@ -1075,7 +1118,34 @@ func main() {
 			builder.WriteString(strings.Repeat("-", 60) + "\n")
 		}
 
-		output.SetText(builder.String())
+		vehicleInfoText := builder.String()
+		output.SetText(vehicleInfoText)
+
+		// Show additional options dialog
+		dialog.ShowCustomConfirm("Vehicle Information Options", "OK", "Cancel",
+			container.NewVBox(
+				widget.NewLabel("Vehicle information has been displayed."),
+				widget.NewLabel("Choose an action:"),
+				container.NewGridWithColumns(2,
+					widget.NewButton("Save to File", func() {
+						filename := fmt.Sprintf("vehicle_info_%s_%s.txt", account, time.Now().Format("2006-01-02_15-04-05"))
+						err := os.WriteFile(filename, []byte(vehicleInfoText), 0644)
+						if err != nil {
+							dialog.ShowError(fmt.Errorf("failed to save file: %v", err), myWindow)
+						} else {
+							dialog.ShowInformation("Saved", fmt.Sprintf("Vehicle information saved to %s", filename), myWindow)
+						}
+					}),
+					widget.NewButton("Copy to Clipboard", func() {
+						myWindow.Clipboard().SetContent(vehicleInfoText)
+						dialog.ShowInformation("Copied", "Vehicle information copied to clipboard", myWindow)
+					}),
+				),
+			),
+			func(confirmed bool) {
+				// Dialog closed, no action needed
+			},
+			myWindow)
 	})
 
 	alarmBtn := widget.NewButton("GET DEVICE ALARMS", func() {
@@ -1430,6 +1500,10 @@ func main() {
 			linkContainer := container.NewVBox(
 				widget.NewLabel("RTMP URL:"),
 				linkEntry,
+				widget.NewButton("Copy RTMP URL to Clipboard", func() {
+					myWindow.Clipboard().SetContent(rtmpLink)
+					dialog.ShowInformation("Copied", "RTMP URL copied to clipboard", myWindow)
+				}),
 			)
 
 			dialog.ShowCustom("RTMP Link", "Close", linkContainer, myWindow)
@@ -1529,39 +1603,89 @@ func main() {
 			linkContainer := container.NewVBox(
 				widget.NewLabel("HLS URL:"),
 				linkEntry,
+				widget.NewButton("Copy HLS URL to Clipboard", func() {
+					myWindow.Clipboard().SetContent(hlsLink)
+					dialog.ShowInformation("Copied", "HLS URL copied to clipboard", myWindow)
+				}),
 				widget.NewLabel("HTML Video Player Code:"),
 				htmlEntry,
+				widget.NewButton("Copy HTML Code to Clipboard", func() {
+					myWindow.Clipboard().SetContent(htmlCode)
+					dialog.ShowInformation("Copied", "HTML video player code copied to clipboard", myWindow)
+				}),
 			)
 
 			dialog.ShowCustom("HLS Link", "Close", linkContainer, myWindow)
 		}, myWindow)
 	})
 
-	// Create the final UI layout
-	// Create the final UI layout
-	// Create the final UI layout
-	content := container.NewVBox(
+	// Create the final UI layout with conditional visibility
+	var uiElements []fyne.CanvasObject
+
+	// Add basic login form
+	uiElements = append(uiElements,
 		container.NewGridWithColumns(2,
 			widget.NewLabel("Account:"),
 			accountEntry,
 			widget.NewLabel("Password:"),
 			passwordEntry,
 		),
-		loginBtn,
-		deviceSelector,
-		container.NewGridWithColumns(6, // Changed from 5 to 6 columns
-			vehicleInfoBtn,
-			alarmBtn,
-			refreshBtn,
-			rtspBtn,
-			hlsBtn,
-			rtmpBtn, // Added RTMP button
-		),
+	)
+
+	// Add login button if enabled
+	if config.ShowLoginButton {
+		uiElements = append(uiElements, loginBtn)
+	}
+
+	// Add device selector
+	uiElements = append(uiElements, deviceSelector)
+
+	// Create button row with only enabled buttons
+	var buttons []fyne.CanvasObject
+	if config.ShowVehicleInfoButton {
+		buttons = append(buttons, vehicleInfoBtn)
+	}
+	if config.ShowDeviceAlarmsButton {
+		buttons = append(buttons, alarmBtn)
+	}
+	if config.ShowAutoRefreshButton {
+		buttons = append(buttons, refreshBtn)
+	}
+	if config.ShowRTSPButton {
+		buttons = append(buttons, rtspBtn)
+	}
+	if config.ShowHLSButton {
+		buttons = append(buttons, hlsBtn)
+	}
+	if config.ShowRTMPButton {
+		buttons = append(buttons, rtmpBtn)
+	}
+
+	// Add button row if there are any buttons to show
+	if len(buttons) > 0 {
+		// Dynamically adjust columns based on number of buttons
+		cols := len(buttons)
+		if cols > 6 {
+			cols = 6 // Maximum 6 columns
+		}
+		uiElements = append(uiElements, container.NewGridWithColumns(cols, buttons...))
+	}
+
+	// Add coordinate system selector
+	uiElements = append(uiElements,
 		widget.NewLabel("Coordinate System:"),
 		coordSystemSelector,
-		saveBtn,
-		output,
 	)
+
+	// Add save button if enabled
+	if config.ShowSaveButton {
+		uiElements = append(uiElements, saveBtn)
+	}
+
+	// Add output area
+	uiElements = append(uiElements, output)
+
+	content := container.NewVBox(uiElements...)
 
 	myWindow.SetContent(content)
 	myWindow.Resize(fyne.NewSize(800, 600))

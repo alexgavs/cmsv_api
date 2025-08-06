@@ -13,7 +13,7 @@ The second login of the same account will not invalidate the jsession generated 
 
 ### Request Example
 ```
-https://v7.cmsv8.com/StandardApiAction_login.action?account=cmsv6&password=cmsv6
+https://ahd.samsonix.com/StandardApiAction_login.action?account=cmsv6&password=cmsv6
 ```
 
 ### Request Parameters
@@ -49,7 +49,7 @@ User Logoff Login
 
 ### Request Example
 ```
-https://v7.cmsv8.com/StandardApiAction_logout.action?jsession=66d754dd7f41473dbd2
+https://ahd.samsonix.com/StandardApiAction_logout.action?jsession=66d754dd7f41473dbd2
 ```
 
 ### Request Parameters
@@ -76,7 +76,7 @@ Get user vehicle information
 
 ### Request Example
 ```
-https://v7.cmsv8.com/StandardApiAction_queryUserVehicle.action?jsession=66d754dd7f41473dbd2
+https://ahd.samsonix.com/StandardApiAction_queryUserVehicle.action?jsession=66d754dd7f41473dbd2
 ```
 
 ### Request Parameters
@@ -247,85 +247,35 @@ https://v7.cmsv8.com/StandardApiAction_queryUserVehicle.action?jsession=66d754dd
 }
 ```
 
-## Common Error Codes
-
-### Web Error Code Description
-| Error Code | Description |
-|------------|-------------|
-| 1          | The username or password is invalid |
-| 2          | The username or password is invalid |
-| 3          | User disabled |
-| 4          | The user has expired |
-| 5          | Session does not exist |
-| 6          | System exception |
-| 7          | The request parameters are incorrect |
-| 8          | No permission to operate the vehicle or equipment |
-| 9          | The start time must not be greater than the end time |
-| 10         | Query time out of range |
-| 11         | The video download task already exists |
-| 12         | Account already exists |
-| 13         | No permission to operate |
-| 14         | Number of managed devices (maximum number of additions reached) |
-| 15         | Device already exists |
-| 16         | Vehicle already exists |
-| 17         | Device already in use |
-| 18         | Vehicle not present |
-| 19         | Device does not exist |
-| 20         | The device does not belong to the current company |
-| 21         | The number of registered devices does not match. Check whether the number of registered devices exceeds the number of registered devices. |
-| 24         | Network connection exception |
-| 25         | Rule name already exists |
-| 26         | Rule does not exist |
-| 27         | Information does not exist |
-| 28         | Session number already exists |
-| 29         | Company does not exist |
-| 32         | Device not online |
-| 34         | Single sign-on user, already logged in |
-
-### Server Error Code Description (return parameters include: "cmsserver":1)
-| Error Code | Description |
-|------------|-------------|
-| 2          | The username or password is invalid |
-| 3          | Invalid username or password |
-| 4          | User disabled |
-| 5          | Information does not exist |
-| 6          | Unknown error |
-| 7          | Name already in use |
-| 21         | Device does not exist |
-| 22         | No feedback received from the device |
-| 23         | Device not online |
-| 26         | Device connection lost |
-| 27         | No storage path defined |
-
-## Get device online status
+## Get Device Online Status
 
 ### Interface Description
 Get device online status
 
 ### Request Example
 ```
-https://v7.cmsv8.com/StandardApiAction_getDeviceOlStatus.action?jsession=66d754dd7f41473dbd2&vehiIdno=S66666&status=1
+https://ahd.samsonix.com/StandardApiAction_getDeviceOlStatus.action?jsession=66d754dd7f41473dbd2&vehiIdno=S66666&status=1
 ```
 
 ### Request Parameters
-| Parameter name | Parameter type | Required | Example         | Parameter meaning |
-|---------------|---------------|----------|-----------------|-------------------|
-| jsession      | string        | Yes      | 66d754dd7f41473dbd2 | Session number    |
-| devIdno       | string        | No       | 01330000001     | Device number(s), comma-separated. If empty, license plate number is used. |
-| vehiIdno      | string        | No       | S66666          | License plate number(s), comma-separated. If empty, queries all authorized equipment for the account. |
-| status        | number        | No       | 1               | Online status: 0 not online, 1 online, empty queries all. |
+| Parameter name | Parameter type | Must | Example                  | Parameter meaning |
+|---------------|---------------|------|--------------------------|-------------------|
+| jsession      | string        | Yes  | 66d754dd7f41473dbd2      | Session number    |
+| devIdno       | string        | No   | 01330000001              | Device number (can be multiple, comma-separated). If empty, license plate number is used |
+| vehiIdno      | string        | No   | S66666                   | License plate number (can be multiple, comma-separated). If both are empty, query all authorized equipment |
+| status        | number        | No   | 1                        | Online status: 0=offline, 1=online, empty=query all |
 
 ### Return Parameters
 | Parameter Name | Parameter Type | Meaning of Parameters |
-|---------------|---------------|----------------------|
-| result        | number        | Interface status code, 0 is normal, other values indicate errors. (See Error Code Description) |
-| onlines       | array         | List of device online status information |
-| did           | string        | Equipment number |
-| vid           | string        | License plate number (empty if queried by equipment number) |
-| online        | number        | Online status: 1 means online, otherwise not online |
+|----------------|---------------|----------------------|
+| result         | number        | Interface status code: 0 is normal, other values indicate errors. (See Error Code Description) |
+| onlines        | array         | Online status information |
+| did            | string        | Equipment number |
+| vid            | string        | License plate number (empty if queried by equipment number) |
+| online         | number        | Online status: 1=online, otherwise offline |
 
 ### Return Example
-```
+```json
 {
   "result": 0,
   "onlines": [
@@ -339,65 +289,66 @@ https://v7.cmsv8.com/StandardApiAction_getDeviceOlStatus.action?jsession=66d754d
 }
 ```
 
-## Get real-time device status
+## Get Real-time Device Status
 
 ### Interface Description
 Get real-time device status
 
 ### Request Example
 ```
-https://v7.cmsv8.com/StandardApiAction_getDeviceStatus.action?jsession=66d754dd7f41473dbd2&vehiIdno=S66666
+https://ahd.samsonix.com/StandardApiAction_getDeviceStatus.action?jsession=66d754dd7f41473dbd2&vehiIdno=S66666
 ```
 
 ### Request Parameters
-| Parameter name | Parameter type | Required | Example                | Parameter meaning |
-|---------------|---------------|----------|------------------------|-------------------|
-| jsession      | string        | Yes      | 66d754dd7f41473dbd2    | Session number    |
-| devIdno       | string        | No       | 01330000001,01330000002| Device number(s), comma-separated. If empty, license plate number is used. |
-| vehiIdno      | string        | No       | S66666                 | License plate number(s), comma-separated. If both are blank, queries all authorized devices of the account. |
-| geoaddress    | number        | No       | 0                      | 1: provide geographic location resolution, otherwise not resolved |
-| driver        | number        | No       | 1                      | 1: query driver info, other/not passed: not queried |
-| toMap         | number        | No       | 0                      | 0: WGS84, 1: Google (gj02), 2: Baidu (bd09) |
-| language      | string        | No       | en                     | Language for longitude/latitude analysis (zh for Chinese) |
+| Parameter name | Parameter type | Must | Example                  | Parameter meaning |
+|---------------|---------------|------|--------------------------|-------------------|
+| jsession      | string        | Yes  | 66d754dd7f41473dbd2      | Session number    |
+| devIdno       | string        | No   | 01330000001,01330000002  | Equipment number (can be multiple, comma-separated). If empty, use license plate number |
+| vehiIdno      | string        | No   | S66666                   | License plate number (can be multiple, comma-separated). If both are empty, query all authorized devices |
+| geoaddress    | number        | No   | 0                        | Whether to resolve geographic location: 1=provide geo resolution service, 0=no resolution |
+| driver        | number        | No   | 1                        | Whether to query driver information: 1=query, other=no query |
+| toMap         | number        | No   | 0                        | Map coordinate conversion: 0=WGS84 (default), 1=Google (gj02), 2=Baidu (bd09) |
+| language      | string        | No   | en                       | Language for longitude/latitude analysis: zh=Chinese, en=English |
 
 ### Return Parameters
 | Parameter name | Parameter type | Description |
 |---------------|---------------|-------------|
 | id            | string        | Device number |
 | vid           | string        | License plate |
-| lng           | number        | Longitude (divide by 1,000,000 for true value) |
-| lat           | number        | Latitude (divide by 1,000,000 for true value) |
-| ft            | number        | Type of manufacturer |
-| sp            | number        | Speed (km/h, divide by 10) |
-| ol            | number        | Online status: 1 means online, otherwise not online |
-| gt            | string        | Locate upload time |
+| lng           | number        | Longitude (0 if invalid location). Example: 113231258 = 113.231258 |
+| lat           | number        | Latitude (0 if invalid location). Example: 39231258 = 39.231258 |
+| ft            | number        | Manufacturer type |
+| sp            | number        | Speed (km/h, divide by 10 in use) |
+| ol            | number        | Online status: 1=online, otherwise offline |
+| gt            | string        | Location upload time |
 | pt            | number        | Communication protocol type |
-| dt            | number        | Hard disk type: 1 SD card, 2 hard disk, 3 SSD card |
+| dt            | number        | Hard disk type: 1=SD card, 2=hard disk, 3=SSD card |
 | ac            | number        | Audio type |
-| net           | number        | Network type: 0 3G, 1 WIFI, 2 wired, 3 4G, 4 5G |
-| gw            | string        | Gateway server number |
-| s1-s4         | number        | Device status description (see details) |
+| net           | number        | Network type: 0=3G, 1=WIFI, 2=wired, 3=4G, 4=5G |
+| gw            | string        | Gateway Server Number |
+| s1            | number        | Status 1 (see Device Status Description) |
+| s2            | number        | Status 2 (see Device Status Description) |
+| s3            | number        | Status 3 (see Device Status Description) |
+| s4            | number        | Status 4 (see Device Status Description) |
 | t1-t4         | number        | Temperature sensors 1-4 |
-| hx            | number        | North direction (0-360 degrees) |
-| mlng          | string        | Converted longitude |
-| mlat          | string        | Converted latitude |
+| hx            | number        | Direction (0° north, increases clockwise, max 360°) |
+| mlng          | string        | Converted longitude of map |
+| mlat          | string        | Converted latitude of map |
 | pk            | number        | Parking duration (seconds) |
 | lc            | number        | Mileage (meters) |
-| yl            | number        | Oil quantity (liters, divide by 100) |
-| viceYl        | number        | Secondary oil quantity (liters, divide by 100) |
-| ps            | string        | Resolved geographic location or (converted longitude, latitude) |
-| tsp           | number        | Tachograph speed (km/h, divide by 10) |
+| yl            | number        | Oil quantity (liters, divide by 100 in use) |
+| viceYl        | number        | Secondary oil quantity (liters, divide by 100 in use) |
+| ps            | string        | Resolved geographic location or (converted longitude, converted latitude) |
+| tsp           | number        | Tachograph speed (km/h, divide by 10 in use) |
 | dn            | string        | Driver name |
 | jn            | string        | Driver certificate code |
-| lt            | number        | Login type: 0-linux, 1-windows, 2-web, 3-Android, 4-ios |
-| ust           | number        | Usage status: 0 normal, 1 maintenance, 2 disabled, 3 overdue |
+| lt            | number        | Login type: 0=linux, 1=windows, 2=web, 3=Android, 4=iOS |
+| ust           | number        | Usage status: 0=normal, 1=maintenance, 2=disabled, 3=overdue |
 | sn            | number        | Number of satellites |
-| lg            | number        | 2: long positioning (see 808-2019 protocol) |
-| rt            | string        | Server time to receive location (valid when lg=2) |
-| ...           | ...           | Many more fields as described above |
+| lg            | number        | Location type (2 indicates long positioning, refer to 808-2019 protocol) |
 
 ### Return Example
-```
+```json
 {
   "result": 0,
   "status": [
@@ -430,30 +381,73 @@ https://v7.cmsv8.com/StandardApiAction_getDeviceStatus.action?jsession=66d754dd7
       "ac": 0,
       "ft": 0,
       "vid": "S66666",
-      "lt": 0,
-      "tsp": 0,
-      "abbr": "",
-      "lg": 2,
-      "sn": 0,
-      "viceYl": 0
-      // ...other fields...
+      "abbr": ""
     }
   ]
 }
 ```
 
-### Map Example
+## Map Example
 
-**URL:**
+### URL
 ```
-https://v7.cmsv8.com/808gps/open/map/vehicleMap.html?jsession=66d754dd7f41473dbd2&devIdno=013300000001&lang=en
+https://ahd.samsonix.com/808gps/open/map/vehicleMap.html?jsession=66d754dd7f41473dbd2&devIdno=013300000001&lang=en
 ```
 
-**Parameter Description**
-| Parameter name | Parameter type | Required | Example           | Parameter meaning |
-|---------------|---------------|----------|-------------------|-------------------|
-| jsession      | string        | No       | 66d754dd7f41473dbd2 | Session number, if blank, use username and password |
-| devIdno       | string        | No       | 0133000000001     | Device number, if empty, use license plate number |
-| vehiIdno      | string        | No       | S66666            | License plate number, if device number is empty |
-| lang          | string        | No       | en                | Language: en for English, otherwise Chinese |
+### Parameter Description
+| Parameter name | Parameter type | Must | Example                  | Parameter meaning |
+|---------------|---------------|------|--------------------------|-------------------|
+| jsession      | string        | No   | 66d754dd7f41473dbd2      | Session number (if blank, use username and password) |
+| devIdno       | string        | No   | 0133000000001            | Equipment number (if empty, use license plate number) |
+| vehiIdno      | string        | No   | S66666                   | License plate number (if device number is empty) |
+| lang          | string        | No   | en                       | Language: en=English, otherwise Chinese |
 
+## Common Error Codes
+
+### 1. Web Error Code Description
+| Error Code | Description |
+|------------|-------------|
+| 1          | The username or password is invalid |
+| 2          | The username or password is invalid |
+| 3          | User disabled |
+| 4          | The user has expired |
+| 5          | Session does not exist |
+| 6          | System exception |
+| 7          | The request parameters are incorrect |
+| 8          | No permission to operate the vehicle or equipment |
+| 9          | The start time must not be greater than the end time |
+| 10         | Query time out of range |
+| 11         | The video download task already exists |
+| 12         | Account already exists |
+| 13         | No permission to operate |
+| 14         | Number of managed devices (maximum number of additions reached) |
+| 15         | Device already exists |
+| 16         | Vehicle already exists |
+| 17         | Device already in use |
+| 18         | Vehicle not present |
+| 19         | Device does not exist |
+| 20         | The device does not belong to the current company |
+| 21         | The number of registered devices does not match |
+| 24         | Network connection exception |
+| 25         | Rule name already exists |
+| 26         | Rule does not exist |
+| 27         | Information does not exist |
+| 28         | Session number already exists |
+| 29         | Company does not exist |
+| 32         | Device not online |
+| 34         | Single sign-on user, already logged in |
+
+### 2. Server Error Code Description (return parameters include: "cmsserver":1)
+| Error Code | Description |
+|------------|-------------|
+| 2          | The username or password is invalid |
+| 3          | Invalid username or password |
+| 4          | User disabled |
+| 5          | Information does not exist |
+| 6          | Unknown error |
+| 7          | Name already in use |
+| 21         | Device does not exist |
+| 22         | No feedback received from the device |
+| 23         | Device not online |
+| 26         | Device connection lost |
+| 27         | No storage path defined |
