@@ -1,0 +1,121 @@
+name: Build and Release CMSV Video Generator
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: ''
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            suffix: '.exe'
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            suffix: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc pkg-config libgl1-mesa-dev xorg-dev
+
+      - name: Install Windows cross-compilation dependencies
+        if: matrix.goos == 'windows' && matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install -y gcc-mingw-w64
+
+      - name: Install Fyne command
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          mkdir -p dist
+          
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            export CC=x86_64-w64-mingw32-gcc
+          fi
+          
+          BINARY_NAME="cmsv-video-generator-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
+          
+          # Build using fyne package for GUI applications
+          fyne package -os ${{ matrix.goos }} -name "CMSV-Video-Generator"
+          
+          # Move and rename the output
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            mv "CMSV-Video-Generator.exe" "dist/${BINARY_NAME}"
+          elif [ "${{ matrix.goos }}" = "darwin" ]; then
+            mv "CMSV-Video-Generator.app" "dist/CMSV-Video-Generator-darwin-amd64.app" || true
+            tar -czf "dist/cmsv-video-generator-darwin-amd64.tar.gz" -C dist "CMSV-Video-Generator-darwin-amd64.app"
+          else
+            mv "CMSV-Video-Generator" "dist/${BINARY_NAME}"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            ## CMSV Video Generator Release
+            
+            ### Features:
+            - Vehicle information display with configurable UI elements
+            - Device alarm monitoring with auto-refresh
+            - RTSP/RTMP/HLS link generation
+            - Configurable server endpoints and ports
+            - Support for multiple coordinate systems
+            
+            ### Downloads:
+            - **Windows**: `cmsv-video-generator-windows-amd64.exe`
+            - **Linux**: `cmsv-video-generator-linux-amd64`
+            - **macOS**: `cmsv-video-generator-darwin-amd64.tar.gz`
+            
+            ### Configuration:
+            Edit `config.ini` to customize server settings and UI element visibility.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
