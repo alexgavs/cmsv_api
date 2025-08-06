@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,111 @@ import (
 	"strings"
 	"time"
 )
+
+// AppConfig holds all configuration values
+type AppConfig struct {
+	ServerURL string
+	APIPort   int
+	RTMPPort  int
+	RTSPPort  int
+	HLSPort   int
+}
+
+// Global config variable
+var config AppConfig
+
+// loadConfig reads the configuration from config.ini file
+func loadConfig() error {
+	// Set default values
+	config = AppConfig{
+		ServerURL: "https://cloud.samsonix.com",
+		APIPort:   443,
+		RTMPPort:  1935,
+		RTSPPort:  6604,
+		HLSPort:   16604,
+	}
+
+	file, err := os.Open("config.ini")
+	if err != nil {
+		// If config file doesn't exist, use defaults and create one
+		fmt.Println("Config file not found, using defaults and creating config.ini")
+		return createDefaultConfig()
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Parse key = value pairs
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		// Remove quotes from value if present
+		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+			value = value[1 : len(value)-1]
+		}
+
+		switch key {
+		case "server_url":
+			config.ServerURL = value
+		case "api_port":
+			if port, err := strconv.Atoi(value); err == nil {
+				config.APIPort = port
+			}
+		case "rtmp_port":
+			if port, err := strconv.Atoi(value); err == nil {
+				config.RTMPPort = port
+			}
+		case "rtsp_port":
+			if port, err := strconv.Atoi(value); err == nil {
+				config.RTSPPort = port
+			}
+		case "hls_port":
+			if port, err := strconv.Atoi(value); err == nil {
+				config.HLSPort = port
+			}
+		}
+	}
+
+	return scanner.Err()
+}
+
+// createDefaultConfig creates a default config.ini file
+func createDefaultConfig() error {
+	content := `# Application Configuration File
+
+# Server URL
+server_url = "https://cloud.samsonix.com"
+
+# API Port
+api_port = 443
+
+# RTMP Port
+rtmp_port = 1935
+
+# RTSP Port
+rtsp_port = 6604
+
+# HLS Port
+hls_port = 16604
+
+# Other configuration options can be added below
+# Example:
+# map_port = 8080
+`
+	return os.WriteFile("config.ini", []byte(content), 0644)
+}
 
 type Config struct {
 	Account  string `json:"account"`
@@ -366,9 +472,9 @@ type RTSPLinkOptions struct {
 
 // GenerateRTSPLink creates a properly formatted RTSP URL for video streaming
 func GenerateRTSPLink(opts RTSPLinkOptions) string {
-	// Set default port if not specified
+	// Set default port from config if not specified
 	if opts.ServerPort == 0 {
-		opts.ServerPort = 6604
+		opts.ServerPort = config.RTSPPort
 	}
 
 	// Default to live video if not specified
@@ -403,9 +509,9 @@ type HLSLinkOptions struct {
 // HLS(HTTP Live streaming) is a streaming media transmission protocol based on HTTP, which is proposed by Apple as a protocol interaction method for transmitting audio and video.
 // Provides the real- time video request address based on the HLS protocol. Currently supports h264, does not support h265.
 func GenerateHLSLink(opts HLSLinkOptions) string {
-	// Set default port if not specified
+	// Set default port from config if not specified
 	if opts.ServerPort == 0 {
-		opts.ServerPort = 16604
+		opts.ServerPort = config.HLSPort
 	}
 
 	// Default to real-time video if not specified
@@ -427,7 +533,7 @@ func GenerateHLSLink(opts HLSLinkOptions) string {
 // RTMPLinkOptions contains the parameters needed to build an RTMP URL
 type RTMPLinkOptions struct {
 	ServerHost string // RTMP server hostname
-	ServerPort int    // RTMP server port (default 6604)
+	ServerPort int    // RTMP server port (default from config)
 	JSession   string // Session token from login
 	DevIDNO    string // Device ID number
 	Channel    int    // Channel number (starts from 0)
@@ -437,9 +543,9 @@ type RTMPLinkOptions struct {
 
 // GenerateRTMPLink creates a properly formatted RTMP URL for video streaming
 func GenerateRTMPLink(opts RTMPLinkOptions) string {
-	// Set default port if not specified
+	// Set default port from config if not specified
 	if opts.ServerPort == 0 {
-		opts.ServerPort = 6604
+		opts.ServerPort = config.RTMPPort
 	}
 
 	// Default to live video if not specified
@@ -458,17 +564,12 @@ func GenerateRTMPLink(opts RTMPLinkOptions) string {
 		opts.Stream)
 }
 
-const (
-	loginURL       = "https://cloud.samsonix.com/StandardApiAction_login.action"
-	statusURL      = "https://cloud.samsonix.com/StandardApiAction_getDeviceOlStatus.action"
-	liveAPIBaseURL = "https://cloud.samsonix.com/StandardApiAction_realTimeVedio.action"
-	vehicleInfoURL = "https://cloud.samsonix.com/StandardApiAction_queryUserVehicle.action"
-	alarmURL       = "https://cloud.samsonix.com/StandardApiAction_vehicleAlarm.action"
-)
-
 func httpGetJSON(url string) ([]byte, error) {
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
 	req.Header.Set("User-Agent", "GoClient")
 
 	resp, err := client.Do(req)
@@ -479,7 +580,12 @@ func httpGetJSON(url string) ([]byte, error) {
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 		}
-		resp, err = insecureClient.Do(req)
+		req2, err2 := http.NewRequest("GET", url, nil)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to create retry request: %v", err2)
+		}
+		req2.Header.Set("User-Agent", "GoClient")
+		resp, err = insecureClient.Do(req2)
 	}
 	if err != nil {
 		return nil, err
@@ -497,7 +603,7 @@ func isCertError(err error) bool {
 }
 
 func login(account, password string) (string, error) {
-	url := fmt.Sprintf("%s?account=%s&password=%s", loginURL, account, password)
+	url := fmt.Sprintf("%s?account=%s&password=%s", getLoginURL(), account, password)
 	data, err := httpGetJSON(url)
 	if err != nil {
 		return "", err
@@ -513,7 +619,7 @@ func login(account, password string) (string, error) {
 }
 
 func getDevices(jsession string) ([]Device, error) {
-	url := fmt.Sprintf("%s?jsession=%s", statusURL, jsession)
+	url := fmt.Sprintf("%s?jsession=%s", getStatusURL(), jsession)
 
 	data, err := httpGetJSON(url)
 	if err != nil {
@@ -527,7 +633,7 @@ func getDevices(jsession string) ([]Device, error) {
 }
 
 func getVehicleInfo(jsession string) (*VehicleResponse, error) {
-	url := fmt.Sprintf("%s?jsession=%s", vehicleInfoURL, jsession)
+	url := fmt.Sprintf("%s?jsession=%s", getVehicleInfoURL(), jsession)
 
 	fmt.Printf("Requesting vehicle info from: %s\n", url)
 
@@ -554,7 +660,7 @@ func getVehicleInfo(jsession string) (*VehicleResponse, error) {
 }
 
 func getDeviceAlarms(jsession, devIDNO string, toMap int) (*AlarmResponse, error) {
-	url := fmt.Sprintf("%s?jsession=%s&DevIDNO=%s&toMap=%d", alarmURL, jsession, devIDNO, toMap)
+	url := fmt.Sprintf("%s?jsession=%s&DevIDNO=%s&toMap=%d", getAlarmURL(), jsession, devIDNO, toMap)
 
 	fmt.Printf("Requesting alarms from: %s\n", url)
 
@@ -581,9 +687,9 @@ func getDeviceAlarms(jsession, devIDNO string, toMap int) (*AlarmResponse, error
 
 func generateLinks(jsession, did, vid, account, password string) map[string]string {
 	return map[string]string{
-		"Web Player ID": fmt.Sprintf("http://cloud.samsonix.com/808gps/open/player/video.html?lang=en&devIdno=%s&account=%s&password=%s", did, account, password),
-		"Web Player VI": fmt.Sprintf("http://cloud.samsonix.com/808gps/open/player/video.html?lang=en&vehiIdno=%s&account=%s&password=%s", vid, account, password),
-		"Live API":      fmt.Sprintf("%s?jsession=%s&DevIDNO=%s&Chn=1&Sec=300&Label=test", liveAPIBaseURL, jsession, did),
+		"Web Player ID": fmt.Sprintf("%s/808gps/open/player/video.html?lang=en&devIdno=%s&account=%s&password=%s", getWebPlayerURL(), did, account, password),
+		"Web Player VI": fmt.Sprintf("%s/808gps/open/player/video.html?lang=en&vehiIdno=%s&account=%s&password=%s", getWebPlayerURL(), vid, account, password),
+		"Live API":      fmt.Sprintf("%s?jsession=%s&DevIDNO=%s&Chn=1&Sec=300&Label=test", getLiveAPIBaseURL(), jsession, did),
 	}
 }
 
@@ -764,7 +870,56 @@ func logAlarmsToFile(alarms []AlarmResponseAlarm) {
 	}
 }
 
+// URL generation functions that use config
+func getLoginURL() string {
+	return fmt.Sprintf("%s/StandardApiAction_login.action", config.ServerURL)
+}
+
+func getStatusURL() string {
+	return fmt.Sprintf("%s/StandardApiAction_getDeviceOlStatus.action", config.ServerURL)
+}
+
+func getLiveAPIBaseURL() string {
+	return fmt.Sprintf("%s/StandardApiAction_realTimeVedio.action", config.ServerURL)
+}
+
+func getVehicleInfoURL() string {
+	return fmt.Sprintf("%s/StandardApiAction_queryUserVehicle.action", config.ServerURL)
+}
+
+func getAlarmURL() string {
+	return fmt.Sprintf("%s/StandardApiAction_vehicleAlarm.action", config.ServerURL)
+}
+
+func getWebPlayerURL() string {
+	return strings.Replace(config.ServerURL, "https://", "http://", 1)
+}
+
+// getServerHostname extracts hostname from server URL for streaming services
+func getServerHostname() string {
+	// Remove protocol prefix (https:// or http://)
+	hostname := strings.TrimPrefix(config.ServerURL, "https://")
+	hostname = strings.TrimPrefix(hostname, "http://")
+
+	// Remove any path or port if present
+	parts := strings.Split(hostname, "/")
+	hostname = parts[0]
+
+	// Remove port if present (for cases like hostname:port)
+	parts = strings.Split(hostname, ":")
+	hostname = parts[0]
+
+	return hostname
+}
+
 func main() {
+	// Load configuration
+	err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		return
+	}
+
 	myApp := app.New()
 	myWindow := myApp.NewWindow("CMSV Video Generator Link")
 	myWindow.SetIcon(appIcon())
@@ -1119,7 +1274,7 @@ func main() {
 
 		// Show config dialog for RTSP parameters
 		serverEntry := widget.NewEntry()
-		serverEntry.SetText("cloud.samsonix.com")
+		serverEntry.SetText(getServerHostname())
 
 		streamOptions := []string{"Main Stream (0)", "Sub Stream (1)"}
 		streamSelector := widget.NewSelect(streamOptions, nil)
@@ -1213,7 +1368,7 @@ func main() {
 
 		// Show config dialog for RTMP parameters
 		serverEntry := widget.NewEntry()
-		serverEntry.SetText("cloud.samsonix.com")
+		serverEntry.SetText(getServerHostname())
 
 		streamOptions := []string{"Main Stream (0)", "Sub Stream (1)"}
 		streamSelector := widget.NewSelect(streamOptions, nil)
@@ -1303,7 +1458,7 @@ func main() {
 
 		// Show config dialog for HLS parameters
 		serverEntry := widget.NewEntry()
-		serverEntry.SetText("cloud.samsonix.com")
+		serverEntry.SetText(getServerHostname())
 
 		streamOptions := []string{"Main Stream (0)", "Sub Stream (1)"}
 		streamSelector := widget.NewSelect(streamOptions, nil)

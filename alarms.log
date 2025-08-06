@@ -157,3 +157,31 @@ Mapped Location: 32.031098, 34.795556
 Speed: 11.0 km/h
 Status: Unprocessed
 ------------------------------------------------------------
+=== Alarm log at 2025-08-06 14:59:30 ===
+Device: 000000447007
+Time: 2025-08-06 14:56:28
+Type: 11
+Description: ,0,920
+Location: 32.033730, 34.906980
+Mapped Location: 32.033730, 34.906980
+Speed: 92.0 km/h
+Status: Unprocessed
+------------------------------------------------------------
+Device: 000000447007
+Time: 2025-08-06 14:56:28
+Type: 11
+Description: ,0,1090
+Location: 32.033730, 34.906980
+Mapped Location: 32.033730, 34.906980
+Speed: 92.0 km/h
+Status: Unprocessed
+------------------------------------------------------------
+Device: 000000447007
+Time: 2025-08-06 14:56:50
+Type: 61
+Description: ,0,1090
+Location: 32.039134, 34.906432
+Mapped Location: 32.039134, 34.906432
+Speed: 78.0 km/h
+Status: Unprocessed
+------------------------------------------------------------
