@@ -4,17 +4,18 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-	"time"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -352,6 +353,40 @@ type AlarmResponseAlarm = struct {
 	} `json:"Gps"`
 }
 
+// RTSPLinkOptions contains the parameters needed to build an RTSP URL
+type RTSPLinkOptions struct {
+	ServerHost string // RTSP server hostname
+	ServerPort int    // RTSP server port (default 6604)
+	JSession   string // Session token from login
+	DevIDNO    string // Device ID number
+	Channel    int    // Channel number (starts from 0)
+	Stream     int    // Stream type (0=main stream, 1=sub stream)
+	AVType     int    // 1=live video, 2=listening
+}
+
+// GenerateRTSPLink creates a properly formatted RTSP URL for video streaming
+func GenerateRTSPLink(opts RTSPLinkOptions) string {
+	// Set default port if not specified
+	if opts.ServerPort == 0 {
+		opts.ServerPort = 6604
+	}
+
+	// Default to live video if not specified
+	if opts.AVType == 0 {
+		opts.AVType = 1
+	}
+
+	// Format the RTSP URL according to the API documentation
+	return fmt.Sprintf("rtsp://%s:%d/3/3?AVType=%d&jsession=%s&DevIDNO=%s&Channel=%d&Stream=%d",
+		opts.ServerHost,
+		opts.ServerPort,
+		opts.AVType,
+		opts.JSession,
+		opts.DevIDNO,
+		opts.Channel,
+		opts.Stream)
+}
+
 const (
 	loginURL       = "https://cloud.samsonix.com/StandardApiAction_login.action"
 	statusURL      = "https://cloud.samsonix.com/StandardApiAction_getDeviceOlStatus.action"
@@ -616,15 +651,9 @@ func getStatusDescription(status EquipmentStatus) string {
 }
 
 func appIcon() fyne.Resource {
-	iconBytes := []byte{
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-		0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-		0x0A, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0x00, 0x01, 0x00, 0x00,
-		0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-		0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-	}
-	return fyne.NewStaticResource("icon.png", iconBytes)
+	// Return the default Fyne icon instead of trying to load a custom one
+	// This avoids the PNG decoding error
+	return theme.FyneLogo()
 }
 
 func logAlarmsToFile(alarms []AlarmResponseAlarm) {
@@ -650,8 +679,7 @@ func logAlarmsToFile(alarms []AlarmResponseAlarm) {
 
 		if alarm.Gps.Lat != 0 && alarm.Gps.Lng != 0 {
 			fmt.Fprintf(f, "Location: %.6f, %.6f\n",
-				float64(alarm.Gps.Lat)/1000000.0,
-				float64(alarm.Gps.Lng)/1000000.0)
+				float64(alarm.Gps.Lat)/1000000.0, float64(alarm.Gps.Lng)/1000000.0)
 			fmt.Fprintf(f, "Mapped Location: %s, %s\n", alarm.Gps.MLat, alarm.Gps.MLng)
 			fmt.Fprintf(f, "Speed: %.1f km/h\n", float64(alarm.Gps.SP)/10.0)
 		}
@@ -814,11 +842,9 @@ func main() {
 			// Display device information for each vehicle
 			builder.WriteString("  Devices:\n")
 			for _, device := range vehicle.DeviceList {
-				builder.WriteString(fmt.Sprintf("    Device ID: %s\n", device.ID))
-				builder.WriteString(fmt.Sprintf("    Channels: %d (%s)\n",
-					device.Channels, device.ChanName))
-				builder.WriteString(fmt.Sprintf("    SIM: %s\n", device.SIM))
-				builder.WriteString(fmt.Sprintf("    Install Time: %s\n", device.InstallTime))
+				builder.WriteString(fmt.Sprintf("    - %s (%s)\n", device.ID, device.SIM))
+				builder.WriteString(fmt.Sprintf("      Channels: %d, Channel Name: %s\n", device.Channels, device.ChanName))
+				builder.WriteString(fmt.Sprintf("      Installed: %s\n", device.InstallTime))
 			}
 			builder.WriteString(strings.Repeat("-", 60) + "\n")
 		}
@@ -842,8 +868,11 @@ func main() {
 		var deviceID string
 		if selectedDevice == "All Devices" {
 			deviceID = "" // Empty string means all devices
+		} else if device, ok := deviceMap[selectedDevice]; ok {
+			deviceID = device.DID
 		} else {
-			deviceID = deviceMap[selectedDevice].DID
+			dialog.ShowError(fmt.Errorf("invalid device selection"), myWindow)
+			return
 		}
 
 		// Get coordinate system selection
@@ -870,6 +899,7 @@ func main() {
 			builder.WriteString(fmt.Sprintf("Found %d alarms\n\n", len(alarmData.AlarmList)))
 
 			for _, alarm := range alarmData.AlarmList {
+				// Display alarm details
 				builder.WriteString(fmt.Sprintf("Device: %s\n", alarm.DevIDNO))
 				builder.WriteString(fmt.Sprintf("Time: %s\n", alarm.Time))
 				builder.WriteString(fmt.Sprintf("Type: %d\n", alarm.Type))
@@ -877,21 +907,25 @@ func main() {
 
 				if alarm.Gps.Lat != 0 && alarm.Gps.Lng != 0 {
 					builder.WriteString(fmt.Sprintf("Location: %.6f, %.6f\n",
-						float64(alarm.Gps.Lat)/1000000.0,
-						float64(alarm.Gps.Lng)/1000000.0))
-					builder.WriteString(fmt.Sprintf("Mapped Location: %s, %s\n",
-						alarm.Gps.MLat, alarm.Gps.MLng))
+						float64(alarm.Gps.Lat)/1000000.0, float64(alarm.Gps.Lng)/1000000.0))
+					builder.WriteString(fmt.Sprintf("Mapped Location: %s, %s\n", alarm.Gps.MLat, alarm.Gps.MLng))
 					builder.WriteString(fmt.Sprintf("Speed: %.1f km/h\n", float64(alarm.Gps.SP)/10.0))
 				}
 
+				status := "Unprocessed"
 				if alarm.HD == 1 {
-					builder.WriteString("Status: Processed\n")
-				} else {
-					builder.WriteString("Status: Unprocessed\n")
+					status = "Processed"
 				}
-
+				builder.WriteString(fmt.Sprintf("Status: %s\n", status))
 				builder.WriteString(strings.Repeat("-", 60) + "\n")
 			}
+
+			// Log alarms to file for future reference
+			var alarmSlice []AlarmResponseAlarm
+			for _, a := range alarmData.AlarmList {
+				alarmSlice = append(alarmSlice, a)
+			}
+			logAlarmsToFile(alarmSlice)
 		}
 
 		output.SetText(builder.String())
@@ -900,9 +934,7 @@ func main() {
 	// Add refresh button to continuously fetch alarms
 	var refreshTicker *time.Ticker
 	var stopRefresh chan bool
-	var refreshBtn *widget.Button // Declare refreshBtn first
-
-	// Then define it
+	var refreshBtn *widget.Button
 	refreshBtn = widget.NewButton("AUTO REFRESH ALARMS", func() {
 		if refreshTicker != nil {
 			// Stop auto-refresh
@@ -917,124 +949,200 @@ func main() {
 		const timeoutSec = 5
 		message := fmt.Sprintf("Start auto-refreshing alarms every %d seconds?", timeoutSec)
 
-		dialog.ShowConfirm("Auto-refresh", message,
-			func(start bool) {
-				if !start {
-					return
-				}
+		dialog.ShowConfirm("Auto-refresh", message, func(start bool) {
+			if !start {
+				return
+			}
 
-				refreshBtn.SetText("STOP AUTO REFRESH")
-				refreshTicker = time.NewTicker(time.Duration(timeoutSec) * time.Second)
+			// Setup channels
+			refreshTicker = time.NewTicker(time.Duration(timeoutSec) * time.Second)
+			stopRefresh = make(chan bool)
+			refreshBtn.SetText("STOP AUTO REFRESH")
 
-				stopRefresh = make(chan bool)
-
-				go func() {
-					for {
-						select {
-						case <-refreshTicker.C:
-							// Call the alarm function
-							if jsessionCache == "" || deviceSelector.Selected == "" {
-								continue
-							}
-
-							// Get the device ID based on selection
-							var deviceID string
-							if deviceSelector.Selected == "All Devices" {
-								deviceID = "" // Empty string means all devices
-							} else {
-								deviceID = deviceMap[deviceSelector.Selected].DID
-							}
-
-							// Get coordinate system selection
-							toMap := 0 // Default to WGS84
-							selectedCoordSystem := coordSystemSelector.Selected
-							if strings.HasPrefix(selectedCoordSystem, "1 -") {
-								toMap = 1 // Google
-							} else if strings.HasPrefix(selectedCoordSystem, "2 -") {
-								toMap = 2 // Baidu
-							}
-
-							alarmData, err := getDeviceAlarms(jsessionCache, deviceID, toMap)
-							if err != nil {
-								continue
-							}
-							logAlarmsToFile(alarmData.AlarmList)
-
-							builder := strings.Builder{}
-							builder.WriteString("=== DEVICE ALARMS (AUTO-REFRESH) ===\n")
-							builder.WriteString(fmt.Sprintf("Last update: %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
-
-							if len(alarmData.AlarmList) == 0 {
-								builder.WriteString("No alarms found for this device\n")
-							} else {
-								builder.WriteString(fmt.Sprintf("Found %d alarms\n\n", len(alarmData.AlarmList)))
-
-								for _, alarm := range alarmData.AlarmList {
-									builder.WriteString(fmt.Sprintf("Device: %s\n", alarm.DevIDNO))
-									builder.WriteString(fmt.Sprintf("Time: %s\n", alarm.Time))
-									builder.WriteString(fmt.Sprintf("Type: %d\n", alarm.Type))
-									builder.WriteString(fmt.Sprintf("Description: %s\n", alarm.Desc))
-
-									if alarm.Gps.Lat != 0 && alarm.Gps.Lng != 0 {
-										builder.WriteString(fmt.Sprintf("Location: %.6f, %.6f\n",
-											float64(alarm.Gps.Lat)/1000000.0,
-											float64(alarm.Gps.Lng)/1000000.0))
-										builder.WriteString(fmt.Sprintf("Mapped Location: %s, %s\n",
-											alarm.Gps.MLat, alarm.Gps.MLng))
-										builder.WriteString(fmt.Sprintf("Speed: %.1f km/h\n", float64(alarm.Gps.SP)/10.0))
-									}
-
-									if alarm.HD == 1 {
-										builder.WriteString("Status: Processed\n")
-									} else {
-										builder.WriteString("Status: Unprocessed\n")
-									}
-
-									builder.WriteString(strings.Repeat("-", 60) + "\n")
-								}
-							}
-
-							// Update UI thread-safely
-							go func() {
-								output.SetText(builder.String())
-								output.Refresh() // Ensure the widget updates
-							}()
-
-						case <-stopRefresh:
-							if refreshTicker != nil {
-								refreshTicker.Stop()
-								close(stopRefresh)
-							}
-							return
+			// Start refresh goroutine
+			go func() {
+				for {
+					select {
+					case <-refreshTicker.C:
+						// Get device ID based on selection
+						var deviceID string
+						if deviceSelector.Selected == "All Devices" {
+							deviceID = "" // Empty string means all devices
+						} else if device, ok := deviceMap[deviceSelector.Selected]; ok {
+							deviceID = device.DID
+						} else {
+							continue
 						}
+
+						// Get coordinate system
+						toMap := 0 // Default to WGS84
+						selectedCoordSystem := coordSystemSelector.Selected
+						if strings.HasPrefix(selectedCoordSystem, "1 -") {
+							toMap = 1 // Google
+						} else if strings.HasPrefix(selectedCoordSystem, "2 -") {
+							toMap = 2 // Baidu
+						}
+
+						// Fetch alarms
+						alarmData, err := getDeviceAlarms(jsessionCache, deviceID, toMap)
+						if err != nil {
+							continue // Skip this iteration on error
+						}
+
+						// Build output
+						builder := strings.Builder{}
+						builder.WriteString(fmt.Sprintf("=== AUTO REFRESH ALARMS (%s) ===\n",
+							time.Now().Format("15:04:05")))
+
+						if len(alarmData.AlarmList) == 0 {
+							builder.WriteString("No alarms found for this device\n")
+						} else {
+							builder.WriteString(fmt.Sprintf("Found %d alarms\n\n", len(alarmData.AlarmList)))
+
+							for _, alarm := range alarmData.AlarmList {
+								// Display alarm details
+								builder.WriteString(fmt.Sprintf("Device: %s\n", alarm.DevIDNO))
+								builder.WriteString(fmt.Sprintf("Time: %s\n", alarm.Time))
+								builder.WriteString(fmt.Sprintf("Type: %d\n", alarm.Type))
+								builder.WriteString(fmt.Sprintf("Description: %s\n", alarm.Desc))
+
+								builder.WriteString(strings.Repeat("-", 60) + "\n")
+							}
+						}
+
+						// Update UI thread-safely
+						// Update UI on main thread
+						output.SetText(builder.String())
+						output.Refresh()
+
+					case <-stopRefresh:
+						if refreshTicker != nil {
+							refreshTicker.Stop()
+						}
+						return
 					}
-				}()
-			}, myWindow) // Added missing window parameter
+				}
+			}()
+		}, myWindow)
 	})
 
-	// Update window content with coordinate selector and refresh button
-	myWindow.SetContent(container.NewVBox(
-		widget.NewLabel("Samsonix API Generator"),
-		accountEntry,
-		passwordEntry,
-		deviceSelector,
-		container.NewHBox(
-			loginBtn,
-			saveBtn,
-			vehicleInfoBtn,
+	// Add RTSP link generation button
+	rtspBtn := widget.NewButton("Generate RTSP Link", func() {
+		// Ensure we have a valid session and selected device
+		if jsessionCache == "" {
+			dialog.ShowInformation("Error", "Please login first", myWindow)
+			return
+		}
+
+		selectedDevice := deviceSelector.Selected
+		if selectedDevice == "" || selectedDevice == "All Devices" {
+			dialog.ShowInformation("Error", "Please select a specific device", myWindow)
+			return
+		}
+
+		device, ok := deviceMap[selectedDevice]
+		if !ok {
+			dialog.ShowError(fmt.Errorf("invalid device selection"), myWindow)
+			return
+		}
+
+		// Show config dialog for RTSP parameters
+		serverEntry := widget.NewEntry()
+		serverEntry.SetText("cloud.samsonix.com")
+
+		streamOptions := []string{"Main Stream (0)", "Sub Stream (1)"}
+		streamSelector := widget.NewSelect(streamOptions, nil)
+		streamSelector.SetSelected(streamOptions[1]) // Default to sub stream
+
+		channelOptions := []string{"Channel 0", "Channel 1", "Channel 2", "Channel 3"}
+		channelSelector := widget.NewSelect(channelOptions, nil)
+		channelSelector.SetSelected(channelOptions[0]) // Default to channel 0
+
+		configContainer := container.NewVBox(
+			widget.NewLabel("Configure RTSP Stream:"),
+			container.NewGridWithColumns(2,
+				widget.NewLabel("Server:"),
+				serverEntry,
+				widget.NewLabel("Stream Type:"),
+				streamSelector,
+				widget.NewLabel("Channel:"),
+				channelSelector,
+			),
+		)
+
+		dialog.ShowCustomConfirm("RTSP Configuration", "Generate", "Cancel", configContainer, func(generate bool) {
+			if !generate {
+				return
+			}
+
+			// Parse channel number from selection
+			channelStr := channelSelector.Selected
+			channelNum := 0 // Default
+			if len(channelStr) > 0 {
+				channelNum, _ = strconv.Atoi(string(channelStr[len(channelStr)-1]))
+			}
+
+			// Parse stream type from selection
+			streamStr := streamSelector.Selected
+			streamType := 1 // Default to sub stream
+			if strings.Contains(streamStr, "(0)") {
+				streamType = 0 // Main stream
+			}
+
+			// Generate the RTSP link
+			rtspOptions := RTSPLinkOptions{
+				ServerHost: serverEntry.Text,
+				ServerPort: 6604, // Default port
+				JSession:   jsessionCache,
+				DevIDNO:    device.DID,
+				Channel:    channelNum,
+				Stream:     streamType,
+				AVType:     1, // Live video
+			}
+
+			rtspLink := GenerateRTSPLink(rtspOptions)
+
+			// Show the generated link
+			linkEntry := widget.NewMultiLineEntry()
+			linkEntry.SetText(rtspLink)
+			linkEntry.TextStyle = fyne.TextStyle{Monospace: true}
+
+			linkContainer := container.NewVBox(
+				widget.NewLabel("RTSP Link Generated:"),
+				linkEntry,
+				widget.NewButton("Copy to Clipboard", func() {
+					myWindow.Clipboard().SetContent(rtspLink)
+					dialog.ShowInformation("Copied", "RTSP link copied to clipboard", myWindow)
+				}),
+			)
+
+			dialog.ShowCustom("RTSP Link", "Close", linkContainer, myWindow)
+		}, myWindow)
+	})
+
+	// Create the final UI layout
+	content := container.NewVBox(
+		container.NewGridWithColumns(2,
+			widget.NewLabel("Account:"),
+			accountEntry,
+			widget.NewLabel("Password:"),
+			passwordEntry,
 		),
-		widget.NewLabel("Alarm Monitoring"),
-		container.NewHBox(
+		loginBtn,
+		deviceSelector,
+		container.NewGridWithColumns(4,
+			vehicleInfoBtn,
 			alarmBtn,
 			refreshBtn,
+			rtspBtn,
 		),
-		container.NewHBox(
-			widget.NewLabel("Coordinate System:"),
-			coordSystemSelector,
-		),
+		widget.NewLabel("Coordinate System:"),
+		coordSystemSelector,
+		saveBtn,
 		output,
-	))
+	)
 
-	myWindow.Resize(fyne.NewSize(700, 600))
+	myWindow.SetContent(content)
+	myWindow.Resize(fyne.NewSize(800, 600))
 	myWindow.ShowAndRun()
 }

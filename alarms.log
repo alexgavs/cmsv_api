@@ -138,3 +138,22 @@ Type: 67
 Description: 
 Status: Unprocessed
 ------------------------------------------------------------
+=== Alarm log at 2025-08-06 12:12:32 ===
+Device: 000000447007
+Time: 2025-08-06 12:00:45
+Type: 66
+Description: 
+Location: 32.031098, 34.795556
+Mapped Location: 32.031098, 34.795556
+Speed: 11.0 km/h
+Status: Unprocessed
+------------------------------------------------------------
+Device: 000000447007
+Time: 2025-08-06 12:05:14
+Type: 67
+Description: 
+Location: 32.031098, 34.795556
+Mapped Location: 32.031098, 34.795556
+Speed: 11.0 km/h
+Status: Unprocessed
+------------------------------------------------------------
