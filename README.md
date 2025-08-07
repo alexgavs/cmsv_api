@@ -33,20 +33,6 @@ rtsp_port = 6604
 # HLS Port
 hls_port = 16604
 ```
-
-### UI Elements Visibility (1 = show, 0 = hide)
-```ini
-show_login_button = 1
-show_save_button = 1
-show_vehicle_info_button = 1
-show_device_alarms_button = 1
-show_auto_refresh_button = 1
-show_rtsp_button = 1
-show_rtmp_button = 1
-show_hls_button = 1
-show_company_hierarchy = 0
-```
-
 ## Installation
 
 ### Prerequisites
